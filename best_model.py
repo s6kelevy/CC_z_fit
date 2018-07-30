@@ -1,55 +1,56 @@
 import os, shutil, pickle, sys
-import matplotlib.pyplot as plt
 import numpy as np
 
 
-class Best_Fit():
-    def __init__(self, name_save_folder, data_set, all_fits):
+
+
+class Best_Model():
+    def __init__(self, name_save_folder, bin, bin_models):
+        """Initializing narrow bin for which best model should be obtained out of all the bin models"""
         self.name_save_folder = name_save_folder
-        self.data_set = data_set+1
-        self.all_fits = all_fits
-        self.x = None
-        self.y = None
-        self.z = None
-
-
-    def best_fit(self):
-        d = open("../"+self.name_save_folder+"/bin"+str(self.data_set)+"/"+str(1)+"Gauss/"+str(1)+"Gauss.bin", "rb")
-        self.x = pickle.load(d)
-        self.y = pickle.load(d)
-        self.z = pickle.load(d)
-        d.close()
-        for i in range(1, self.all_fits, 1):
-            d = open("../"+self.name_save_folder+"/bin"+str(self.data_set)+"/"+str(i+1)+"Gauss/"+str(i+1)+"Gauss.bin", "rb")
-            x = pickle.load(d)
-            y = pickle.load(d)
-            z = pickle.load(d)
-            d.close()
-            if z.BIC < self.z.BIC:
-                self.x = x
-                self.y = y
-                self.z = z
-                self.z.BIC = z.BIC
-        best_fit = self.x, self.y, self.z
-        return best_fit
+        self.bin = bin
+        self.bin_models = bin_models
+        self.m = None
+        self.f = None
+        self.d = None
 
 
     def __str__(self):
-        data_set = "Analyze for Data Set "+str(self.data_set)+":\n\n"
-        title = "Nr. of            BIC\n" \
-                "fit-curves\n"
+        """Returning for each model of the bin the number of corresponding Gaussian distributions and corresponding BIC value"""
+        bin = "Analyze for bin "+str(self.bin)+":\n\n"
+        title = "{0:>6}{1:>10}".format("Nr. of", "BIC")+"\ncurves\n"
         table = ""
-        for i in range(0, self.all_fits, 1):
-            d = open("../"+self.name_save_folder+"/bin"+str(self.data_set)+"/"+str(i+1)+"Gauss/"+str(i+1)+"Gauss.bin", "rb")
-            x = pickle.load(d)
-            y = pickle.load(d)
-            z = pickle.load(d)
+        for i in range(0, self.bin_models, 1):
+            d = open("../"+self.name_save_folder+"/bin"+str(self.bin)+"/"+str(i+1)+"Gauss/"+str(i+1)+"Gauss.bin", "rb")
+            m = pickle.load(d)
+            f = pickle.load(d)
             d.close()
-            table += "{0:5.0f}{1:>11}{2:5.3f}".format(i+1, " ", z.BIC)+"\n"
-        return data_set+title+table+"\n\n"
+            table += "{0:3.0f}{1:13.0f}".format(i+1, f.BIC)+"\n"
+        return bin+title+table+"\n\n"
+
+
+    def best(self):
+        """Getting best model for considered bin based on the BIC values of the models"""
+        d = open("../"+self.name_save_folder+"/bin"+str(self.bin)+"/"+str(1)+"Gauss/"+str(1)+"Gauss.bin", "rb")
+        self.m = pickle.load(d)
+        self.f = pickle.load(d)
+        d.close()
+        self.d = "../" + self.name_save_folder + "/bin" + str(self.bin) + "/" + str(1) + "Gauss"
+        for i in range(1, self.bin_models, 1):
+            d = open("../" + self.name_save_folder+"/bin"+str(self.bin)+"/"+str(i+1)+"Gauss/"+str(i+1)+"Gauss.bin", "rb")
+            m = pickle.load(d)
+            f = pickle.load(d)
+            d.close()
+            if self.f.BIC - f.BIC > 2:
+                self.f.BIC = f.BIC
+                self.d = "../"+self.name_save_folder+"/bin"+str(self.bin)+"/"+str(i+1)+"Gauss"
+            else:
+                return self.d
+        return self.d
 
 
     def save(self, filepath1, filepath2):
+        """Saving BIC values of the different models and the best model of the considered narrow bin"""
         d = open(filepath1+".txt", "w")
         sys.stdout = d
         print(self)
@@ -58,30 +59,6 @@ class Best_Fit():
         p = open(filepath1+".bin", "wb")
         pickle.dump(self, p)
         p.close()
-        m, d, f = self.best_fit()
-        m.save(filepath2)
-        d.save_mean(filepath2)
-        f.save(filepath2)
+        shutil.copytree(self.d, filepath2)
 
 
-        f.plot()
-        plt.savefig(filepath2 + "_Analyze.png")
-        fig, ax = plt.subplots(figsize=(20, 12))
-        ax.grid()
-        ax.set_title("Redshift Distribution")
-        ax.set_xlabel("z")
-        ax.set_ylabel("n(z)")
-        x_max = max(d.x)
-        x = np.linspace(0, x_max, 100000)
-        d.plot(ax, "red")
-        m.plot(ax, x, "k")
-        plt.savefig(filepath2+".png")
-
-
-
-
-if __name__ == "__main__":
-    for i in range(0, 5, 1):
-        bic = BIC(i+1, 10)
-        print(bic)
-        bic.save("../BIC/bin"+str(i+1)+"/BIC_bin"+str(i+1))
