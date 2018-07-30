@@ -1,4 +1,5 @@
 import sys, pickle, random
+import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
 from gauss import *
@@ -6,22 +7,14 @@ from gauss import *
 
 
 
-
 class Model():
-    def __init__(self, gauss_params, a = None):
-        """Initializing model with gaussian distributions"""
-        self.gauss_params = gauss_params
-        self.a = a
-        self.components = self.build()
+    def __init__(self, components, a = None):
+        """Initializing model with Gaussian distributions; saving the initial parameters in p0,
+         setting error on parameters to 0; a is the bias exponent used for bias correction"""
+        self.components = components
         self.p0 = self.params
         self.errors = [0 for i in range (0, len(self), 1)]
-
-
-    def build(self):
-        """Building list with components for model"""
-        gauss_components = [Gauss(self.gauss_params[i], self.gauss_params[i + 1], self.gauss_params[i + 2])
-                           for i in range(0, len(self.gauss_params), len(Gauss()))]
-        return gauss_components
+        self.a = a
 
 
     def __len__(self):
@@ -31,57 +24,54 @@ class Model():
 
     @ property
     def params(self):
-        """Getting parameters of model"""
-        params = np.array([self.components[i].params for i in range(0, len(self.components), 1)])
-        return params.flatten()
+        return np.array([self.components[i].params for i in range(0, len(self.components), 1)]).flatten()
 
 
     @ params.setter
     def params(self, params):
-        """Setting parameters for model"""
         if len(params) != len(self.params):
-            raise ValueError("params not compatible with model")
+            raise ValueError("Parameters not compatible with model")
         init = 0
         for i in range(0, len(self.components), 1):
             p = [params[j] for j in range(init, init + len(self.components[i]), 1)]
             self.components[i].params = p
             init += len(self.components[i])
-        for i in range(0, int(len(self.gauss_params)/len(Gauss()))-1, 1):
-            for j in range(0, int(len(self.gauss_params)/len(Gauss()))-1-i, 1):
+        for i in range(0, len(self.components)-1, 1):
+            for j in range(0, len(self.components)-i-1, 1):
                 if self.components[j].m > self.components[j+1].m:
                     self.components[j], self.components[j+1] = self.components[j+1], self.components[j]
 
 
     def __call__(self, x):
-        """Returning superposition of individual functions of model"""
+        """Returning superposition of individual components of model multiplied by a bias factor"""
         if self.a == None:
             self.a = 0
-        return sum(self.components[i](x)*(1+x)**self.a for i in range(0, len(self.components), 1))
+        return sum(self.components[i](x) for i in range(0, len(self.components), 1))*(1+x)**self.a
 
 
     def normalize(self):
-        """Normalizing model to unity"""
+        """Calculating normalization factor for function defined in __call__()"""
         f = lambda x: self(x)
-        N, error = integrate.quad(f, -np.inf, np.inf)
+        N, error = integrate.quad(f, 0, np.inf)
         return 1/N
 
 
     def mean(self):
-        """Calculating mean of model as integral of x*f(x)"""
+        """Calculating mean and corresponding std. deviation of model using Monte Carlo sampling"""
         mean_list = []
         f = lambda x: x*self(x)
-        mean, error = integrate.quad(f,0.0001, np.inf)
+        mean, error = integrate.quad(f, 0, np.inf)
         int_params = self.params
         for i in range(0, 1000, 1):
-            self.params = [self.params[j]+random.uniform(self.params[j]-self.errors[j], self.params[j]+self.errors[j]) for j in range(len(self))]
-            m, error = integrate.quad(f, 0.0001, np.inf)
-            mean_list.append(m)
+            self.params = [self.params[j]+random.uniform(-self.errors[j], self.errors[j]) for j in range(0, len(self), 1)]
+            mean_i, error = integrate.quad(f, 0, np.inf)
+            mean_list.append(mean_i)
             self.params = int_params
         return self.normalize()*mean, self.normalize()*np.std(mean_list)
 
 
     def __str__(self):
-        """Printing intial and final parameters and mean of model"""
+        """Returning initial and final parameters and mean of model"""
         parameters0 = "{0:>6}".format("")
         string0 = "\n"
         for i in range(0, len(self.components[0].params), 1):
@@ -110,15 +100,15 @@ class Model():
         if norm == None:
             norm = 1
         for i in range(0, len(self.components), 1):
-            ax.plot(x, norm*self.components[i](x), color="deepskyblue", ls="--")
-        ax.plot(x, norm*self(x), color, label="curve-fit")
-        if mean != None:
-            mean, mean_variance = self.mean()
-            ax.axvline(mean, color='peru', label="calculated mean")
+            ax.plot(x, norm*self.components[i](x), color = "deepskyblue", ls = "--", linewidth = 2)
+        ax.plot(x, norm*self(x), color, label = "Gaussian mixture model", linewidth = 5)
+        if mean == True:
+            mean, mean_std = self.mean()
+            ax.axvline(mean, color = "magenta", label = "model mean", linewidth = 5)
 
 
     def save(self, filepath):
-        """Saving initial and final parameters and mean of model"""
+        """Saving initial and final parameters, mean and plot of model"""
         d = open(filepath+".txt", "a")
         sys.stdout = d
         print(self)
@@ -138,13 +128,12 @@ if __name__ == "__main__":
     ax.grid()
     ax.set_title("Model")
     x = np.linspace(-10, 10, 100000)
-    gauss_params = [-2, 0, 5, -1 ,8, 0.1, -1.5, 0, 0.9]
-    model = Model(gauss_params)
+    model = Model([Gauss(-2, 0, 5), Gauss(-1 ,8, 0.1), Gauss(-1.5, 0, 0.9)])
     print(model)
     print("\n\n\n")
     model.plot(ax, x, "orange", mean = True)
     model.params = [1.5, 0.5, 2, 0.8 ,3, 0.5, 0.9, 1.5, 1]
     print(model)
-    model.plot(ax, x, "magenta", mean = True)
+    model.plot(ax, x, "blue", mean = True)
     plt.legend(loc = "best")
     plt.show()
