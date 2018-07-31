@@ -101,7 +101,7 @@ class Fit():
 
     def get_bias(self, nber_of_curves):
         """Getting bias by weighting and summing the best model of each narrow bin and fitting the weighted sum with a bias power law model,
-        containing an amplitude and an exponent, to the weighted large bin; the weights are based on the number of galaxies per arcmin^2 in each tomographic bin 
+        containing an amplitude and an exponent, to the weighted broad bin; the weights are based on the number of galaxies per arcmin^2 in each tomographic bin; 
         the results get saved in a specific folder"""
         folder = Folder(self.name_save_folder)
         folder.make_folder_get_bias()
